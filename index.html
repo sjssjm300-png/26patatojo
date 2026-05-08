@@ -1,51 +1,58 @@
-/*
- * [화장실 악취 저감을 위한 흡착제 필터 연구]
- * 대상: 이지메이커 가스 센서 (MQ-135 소자 기반)
- * 기능: 농도 구배에 따른 확산 및 흡착 효율 실시간 모니터링
- */
+#include <Servo.h>
 
-const int sensorPin = A0;   // 이지메이커 센서 아날로그 핀
-float Ro = 10.0;            // 깨끗한 공기에서의 초기 저항값 (실험 전 보정 필요)
+// 핀 설정
+const int sensorPin = A0;   // 이지메이커 가스 센서
+const int servoPin = 9;     // 서보모터 (출입구 제어)
+
+// 필터 및 데이터 관련 변수
+float alpha = 0.1;          // EMA 필터 계수 (낮을수록 부드러움)
+float filteredValue = 0;
+float Ro = 10.0;            // 깨끗한 공기 기준 저항값
+
+// 출입구 제어 변수
+Servo myServo;
+bool isOpen = false;
+const int openAngle = 90;   // 문 열림 각도
+const int closeAngle = 0;   // 문 닫힘 각도
 
 void setup() {
   Serial.begin(9600);
-  Serial.println("--- 암모니아 흡착 실험 데이터 로깅 시작 ---");
-  Serial.println("시간(sec), 전압(V), 농도비(Rs/Ro)");
+  myServo.attach(servoPin);
+  myServo.write(closeAngle); // 시작 시 문 닫음
   
-  // 센서 예열 알림 (최소 5분 권장)
-  delay(1000); 
+  filteredValue = analogRead(sensorPin);
+  
+  Serial.println("Time(s),Voltage,Rs_Ro_Ratio,Gate_Status");
 }
 
 void loop() {
-  // 1. 데이터 평활화 (노이즈 제거를 위해 10번 읽어 평균 계산)
-  long sum = 0;
-  for(int i=0; i<10; i++) {
-    sum += analogRead(sensorPin);
-    delay(10);
-  }
-  float sensorValue = sum / 10.0;
+  // 1. 센서 값 읽기 및 EMA 필터 (방방 뜨는 값 보정)
+  int rawRead = analogRead(sensorPin);
+  filteredValue = (rawRead * alpha) + (filteredValue * (1.0 - alpha));
 
-  // 2. 전압값 변환 (0~5V)
-  float voltage = sensorValue * (5.0 / 1023.0);
-
-  // 3. 센서 저항(Rs) 계산 
-  // RL(부하저항)은 모듈 특성에 따라 다르지만 보통 10kOhm 내외
-  float Rs = ((5.0 * 10.0) / voltage) - 10.0;
-
-  // 4. 농도비 계산 (Rs/Ro)
-  // 확산에 의해 농도가 변하면 이 비율이 가파르게 변함
+  // 2. 물리적 수치 변환
+  float voltage = filteredValue * (5.0 / 1023.0);
+  float Rs = ((5.0 * 10.0) / (voltage + 0.001)) - 10.0; // 0나누기 방지
   float ratio = Rs / Ro;
 
-  // 5. 시리얼 플로터용 데이터 출력
-  // 엑셀에 붙여넣기 좋게 콤마(,)로 구분
-  Serial.print(millis() / 1000); // 경과 시간(초)
-  Serial.print(", ");
-  Serial.print(voltage);         // 전압 변화 (확산도 관찰용)
-  Serial.print(", ");
-  Serial.println(ratio);         // 흡착 효율 지표
+  // 3. 출입구 제어 로직 (예시: 농도 전압이 3.0V를 넘으면 환기 위해 개방)
+  // 실험 목적에 따라 "if (millis() > 60000)" 처럼 시간제로 바꿔도 됩니다.
+  if (voltage > 3.0 && !isOpen) {
+    myServo.write(openAngle);
+    isOpen = true;
+  } else if (voltage <= 1.5 && isOpen) {
+    myServo.write(closeAngle);
+    isOpen = false;
+  }
 
-  // 6. 측정 주기 설정
-  // 농도 구배에 따른 확산을 관찰하려면 너무 빠르지도, 느리지도 않은 주기가 중요
-  // 초기 5분은 10초 단위, 이후는 30초 단위로 데이터 로깅 권장
-  delay(10000); 
+  // 4. 시리얼 모니터 출력 (엑셀 데이터용)
+  Serial.print(millis() / 1000);
+  Serial.print(",");
+  Serial.print(voltage);
+  Serial.print(",");
+  Serial.print(ratio);
+  Serial.print(",");
+  Serial.println(isOpen ? "OPEN" : "CLOSED");
+
+  delay(1000); // 1초 단위 로깅
 }
