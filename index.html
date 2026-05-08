@@ -4,52 +4,52 @@
     <meta charset="UTF-8">
     <title>3D Ammonia Physics Simulation Lab</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; display: flex; background: #111; color: #eee; }
+        body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; display: flex; background: #ffffff; color: #333; }
         #canvas-container { flex: 1; position: relative; }
         
-        /* 우측 데이터 패널 */
+        /* 우측 데이터 패널 (라이트 모드) */
         #data-panel { 
-            width: 350px; background: #1e1e1e; border-left: 1px solid #333; 
+            width: 350px; background: #fdfdfd; border-left: 1px solid #e0e0e0; 
             padding: 25px; display: flex; flex-direction: column; gap: 20px;
-            overflow-y: auto; box-shadow: -10px 0 20px rgba(0,0,0,0.5);
+            overflow-y: auto; box-shadow: -5px 0 15px rgba(0,0,0,0.05);
         }
 
-        /* 좌측 상단 제어 패널 */
+        /* 좌측 상단 제어 패널 (라이트 모드) */
         #ui-panel {
             position: absolute; top: 20px; left: 20px;
-            background: rgba(30, 30, 30, 0.85); padding: 20px;
-            border-radius: 15px; border: 1px solid #444;
+            background: rgba(255, 255, 255, 0.9); padding: 20px;
+            border-radius: 15px; border: 1px solid #ddd;
             display: flex; flex-direction: column; gap: 15px; width: 280px;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         }
 
         .input-group { display: flex; align-items: center; justify-content: space-between; }
-        .input-group label { font-size: 13px; color: #bbb; }
+        .input-group label { font-size: 13px; color: #555; font-weight: 600; }
         input[type="number"] { 
-            width: 70px; padding: 6px; border: 1px solid #555; border-radius: 5px; 
-            background: #000; color: #00ffcc; font-size: 14px; text-align: center;
+            width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 5px; 
+            background: #fff; color: #d32f2f; font-size: 14px; text-align: center;
         }
 
         button { 
-            cursor: pointer; padding: 10px; border: none; border-radius: 8px; 
-            background: #3a3a3a; color: white; font-weight: bold; transition: 0.2s;
+            cursor: pointer; padding: 10px; border: 1px solid #ddd; border-radius: 8px; 
+            background: #fff; color: #333; font-weight: bold; transition: 0.2s;
         }
-        button:hover { background: #555; transform: translateY(-2px); }
-        .reset-btn { background: #662222; margin-top: 10px; }
-        .reset-btn:hover { background: #883333; }
+        button:hover { background: #f5f5f5; border-color: #bbb; transform: translateY(-1px); }
+        .reset-btn { background: #fff5f5; color: #c62828; border-color: #ffcdd2; margin-top: 10px; }
+        .reset-btn:hover { background: #ffebee; }
 
         /* 그래프 디자인 */
-        .chart-box { background: #000; border: 1px solid #333; padding: 15px; border-radius: 12px; }
-        canvas.chart-canvas { width: 100%; height: 120px; margin-top: 10px; }
-        .stat-label { font-size: 12px; color: #888; display: flex; justify-content: space-between; }
-        .highlight { color: #00ffcc; font-weight: bold; }
+        .chart-box { background: #fff; border: 1px solid #eee; padding: 15px; border-radius: 12px; }
+        canvas.chart-canvas { width: 100%; height: 120px; margin-top: 10px; border-top: 1px solid #f0f0f0; }
+        .stat-label { font-size: 12px; color: #666; display: flex; justify-content: space-between; }
+        .highlight { color: #d32f2f; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="canvas-container">
     <div id="ui-panel">
-        <h2 style="margin:0 0 10px 0; color:#00ffcc; font-size:18px;">🧪 3D Gas Lab</h2>
+        <h2 style="margin:0 0 10px 0; color:#333; font-size:18px;">🧪 3D Gas Physics Lab</h2>
         
         <div class="input-group">
             <label>암모니아 발생량 (0-100)</label>
@@ -72,17 +72,17 @@
 </div>
 
 <div id="data-panel">
-    <h3 style="margin:0; font-size:20px;">실시간 분석</h3>
+    <h3 style="margin:0; font-size:20px; color:#111;">실시간 분석</h3>
     
     <div class="chart-box">
-        <div class="stat-label">잔류 농도: <span id="particleCount" class="highlight">0</span> particles</div>
+        <div class="stat-label">공간 내 잔류 입자: <span id="particleCount" class="highlight">0</span> particles</div>
         <canvas id="concChart" class="chart-canvas"></canvas>
     </div>
 
     <div class="chart-box">
-        <div class="stat-label">누적 제거량 비교</div>
-        <div class="stat-label" style="margin-top:10px;">환풍구 배출: <span id="fanCount" style="color:#00aaff">0</span></div>
-        <div class="stat-label">활성탄 흡착: <span id="carbCount" style="color:#ffffff">0</span></div>
+        <div class="stat-label" style="font-weight:bold; color:#333;">누적 제거량 비교</div>
+        <div class="stat-label" style="margin-top:10px;">환풍구 배출: <span id="fanCount" style="color:#0288d1; font-weight:bold;">0</span></div>
+        <div class="stat-label">활성탄 흡착: <span id="carbCount" style="color:#424242; font-weight:bold;">0</span></div>
         <canvas id="effChart" class="chart-canvas"></canvas>
     </div>
 </div>
@@ -97,6 +97,8 @@
     // --- Scene Setup ---
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff); // 배경을 흰색으로 설정
+
     const camera = new THREE.PerspectiveCamera(60, container.clientWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, window.innerHeight);
@@ -106,35 +108,43 @@
     let particles = [];
     let removedByFan = 0, removedByCarbon = 0;
 
-    // --- Lighting ---
+    // --- Lighting (밝은 환경에 최적화) ---
     const light = new THREE.DirectionalLight(0xffffff, 1);
     light.position.set(10, 20, 10);
-    scene.add(light, new THREE.AmbientLight(0xffffff, 0.4));
+    scene.add(light, new THREE.AmbientLight(0xffffff, 0.6));
 
     // --- 3D Room ---
     const roomSize = { x: 20, y: 10, z: 15 };
     const roomGeo = new THREE.BoxGeometry(roomSize.x, roomSize.y, roomSize.z);
     const roomEdge = new THREE.LineSegments(
         new THREE.EdgesGeometry(roomGeo), 
-        new THREE.LineBasicMaterial({ color: 0x666666 })
+        new THREE.LineBasicMaterial({ color: 0xcccccc }) // 흰 배경에 맞게 회색 선
     );
     scene.add(roomEdge);
 
     // Floor Grid
-    const grid = new THREE.GridHelper(20, 10, 0x444444, 0x222222);
+    const grid = new THREE.GridHelper(20, 10, 0xeeeeee, 0xf5f5f5);
     grid.position.y = -5;
     scene.add(grid);
 
-    // --- Removal Devices ---
-    // Fan (Circular Wall Vent)
+    // --- 벽면 (암모니아 차단벽) ---
+    const wallMat = new THREE.MeshPhongMaterial({ color: 0xe0e0e0, transparent: true, opacity: 0.5 });
+    const wall1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 8, 8), wallMat);
+    wall1.position.set(-3, -1, 3);
+    const wall2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 8, 8), wallMat);
+    wall2.position.set(3, -1, 3);
+    scene.add(wall1, wall2);
+    const walls = [wall1, wall2];
+
+    // --- 제거 장치 ---
     const fan = new THREE.Mesh(
         new THREE.CircleGeometry(1.2, 32), 
-        new THREE.MeshBasicMaterial({ color: 0x00aaff, side: THREE.DoubleSide })
+        new THREE.MeshBasicMaterial({ color: 0x03a9f4, side: THREE.DoubleSide })
     );
     const fanPositions = [
-        { pos: [-9.95, 3, 0], rot: [0, Math.PI/2, 0] },
-        { pos: [9.95, 3, 0], rot: [0, -Math.PI/2, 0] },
-        { pos: [0, 3, -7.45], rot: [0, 0, 0] }
+        { pos: [-9.95, 3.5, 0], rot: [0, Math.PI/2, 0] },
+        { pos: [9.95, 3.5, 0], rot: [0, -Math.PI/2, 0] },
+        { pos: [0, 3.5, -7.45], rot: [0, 0, 0] }
     ];
     let fanIdx = 0;
     const updateFan = () => {
@@ -144,12 +154,11 @@
     updateFan(); scene.add(fan);
     window.changeFanPos = () => { fanIdx = (fanIdx + 1) % 3; updateFan(); };
 
-    // Carbon Filter (Ceiling Activated Carbon)
     const carbon = new THREE.Mesh(
         new THREE.BoxGeometry(6, 0.3, 6), 
-        new THREE.MeshPhongMaterial({ color: 0x333333 })
+        new THREE.MeshPhongMaterial({ color: 0x424242 })
     );
-    carbon.position.set(4, 4.8, -2);
+    carbon.position.set(5, 4.8, -2);
     scene.add(carbon);
 
     // --- 3 Ammonia Generators ---
@@ -157,9 +166,9 @@
     for(let i=0; i<3; i++) {
         const s = new THREE.Mesh(
             new THREE.CylinderGeometry(0.6, 0.8, 0.8, 16), 
-            new THREE.MeshPhongMaterial({ color: 0x777777 })
+            new THREE.MeshPhongMaterial({ color: 0x9e9e9e })
         );
-        s.position.set((i-1)*6, -4.6, 4);
+        s.position.set((i-1)*7, -4.6, 4);
         scene.add(s);
         sources.push(s);
     }
@@ -178,23 +187,23 @@
         document.getElementById('carbCount').innerText = removedByCarbon;
 
         concCtx.clearRect(0, 0, 320, 120);
-        concCtx.beginPath(); concCtx.strokeStyle = '#00ffcc'; concCtx.lineWidth = 2;
+        concCtx.beginPath(); concCtx.strokeStyle = '#d32f2f'; concCtx.lineWidth = 2;
         history.push(particles.length); history.shift();
         for(let i=0; i<60; i++) {
-            let x = (i/60)*320, y = 120 - (history[i]/1000)*120;
+            let x = (i/60)*320, y = 120 - (history[i]/1200)*120;
             if(i===0) concCtx.moveTo(x, y); else concCtx.lineTo(x, y);
         }
         concCtx.stroke();
 
         effCtx.clearRect(0, 0, 320, 120);
         const max = Math.max(removedByFan, removedByCarbon, 1);
-        effCtx.fillStyle = '#00aaff'; effCtx.fillRect(70, 120, 50, -(removedByFan/max)*100);
-        effCtx.fillStyle = '#666666'; effCtx.fillRect(180, 120, 50, -(removedByCarbon/max)*100);
+        effCtx.fillStyle = '#03a9f4'; effCtx.fillRect(70, 120, 50, -(removedByFan/max)*100);
+        effCtx.fillStyle = '#424242'; effCtx.fillRect(180, 120, 50, -(removedByCarbon/max)*100);
     }
 
     // --- Particle Engine ---
     const pGeo = new THREE.SphereGeometry(0.12, 8, 8);
-    const pMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.6 });
+    const pMat = new THREE.MeshBasicMaterial({ color: 0xffa000, transparent: true, opacity: 0.7 });
 
     function animate() {
         requestAnimationFrame(animate);
@@ -203,12 +212,13 @@
         const fanPower = parseFloat(document.getElementById('fanPower').value) * 0.001;
         const carbEff = parseFloat(document.getElementById('carbEff').value) / 100;
 
-        // Create Particles
+        // Create Particles (Ammonia 특성 반영)
         sources.forEach(src => {
-            if(Math.random() < spawnRate/100) {
+            if(Math.random() < spawnRate/120) {
                 const p = new THREE.Mesh(pGeo, pMat.clone());
                 p.position.copy(src.position).add(new THREE.Vector3(0, 0.6, 0));
-                p.userData.vel = new THREE.Vector3((Math.random()-0.5)*0.15, 0.05, (Math.random()-0.5)*0.15);
+                // 확산성을 위해 초기 속도 무작위성 강화
+                p.userData.vel = new THREE.Vector3((Math.random()-0.5)*0.2, 0.08, (Math.random()-0.5)*0.2);
                 scene.add(p);
                 particles.push(p);
             }
@@ -225,13 +235,13 @@
                 const pull = new THREE.Vector3().subVectors(fan.position, p.position).normalize().multiplyScalar(fanPower * (9/distFan));
                 vel.add(pull);
             }
-            if(distFan < 1.0) {
+            if(distFan < 1.1) {
                 removedByFan++; scene.remove(p); particles.splice(i, 1); continue;
             }
 
             // 2. Carbon Adsorption
             const distCarb = p.position.distanceTo(carbon.position);
-            if(distCarb < 3.0 && Math.random() < carbEff * 0.15) {
+            if(distCarb < 2.8 && Math.random() < carbEff * 0.15) {
                 p.material.opacity -= 0.1;
                 vel.multiplyScalar(0.4);
                 if(p.material.opacity <= 0) {
@@ -239,14 +249,23 @@
                 }
             }
 
-            // 3. Physics (Ammonia is lighter than air -> Buoyancy)
-            vel.y += 0.0025; // Constant upward drift
-            vel.x += (Math.random()-0.5)*0.015; // Random diffusion
+            // 3. Physics (Ammonia 부력 및 브라운 운동)
+            vel.y += 0.0025; 
+            vel.x += (Math.random()-0.5)*0.015;
             vel.z += (Math.random()-0.5)*0.015;
             p.position.add(vel);
-            vel.multiplyScalar(0.985); // Air resistance
+            vel.multiplyScalar(0.99);
 
-            // 4. Boundary Collision
+            // 4. Wall Collision (칸막이 벽)
+            walls.forEach(w => {
+                const wallBox = new THREE.Box3().setFromObject(w);
+                if(wallBox.containsPoint(p.position)) {
+                    vel.x *= -0.8;
+                    p.position.x += vel.x * 2;
+                }
+            });
+
+            // 5. Boundary Collision
             const lx = roomSize.x/2 - 0.2, ly = roomSize.y/2 - 0.2, lz = roomSize.z/2 - 0.2;
             if(Math.abs(p.position.x) > lx) { vel.x *= -0.7; p.position.x = Math.sign(p.position.x)*lx; }
             if(Math.abs(p.position.y) > ly) { vel.y *= -0.7; p.position.y = Math.sign(p.position.y)*ly; }
