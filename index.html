@@ -3,49 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ammonia Gas Dynamics Simulation</title>
+    <title>Ammonia Diffusion Simulation - White Theme</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; background: #050505; }
+        body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; background: #fff; }
         #ui-panel {
             position: absolute; top: 15px; left: 15px;
-            background: rgba(255, 255, 255, 0.92); padding: 20px;
-            border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-            display: flex; flex-direction: column; gap: 12px; min-width: 240px; z-index: 100;
+            background: rgba(240, 240, 240, 0.95); padding: 20px;
+            border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            display: flex; flex-direction: column; gap: 12px; min-width: 250px; z-index: 100;
         }
-        h3 { margin: 0 0 5px 0; font-size: 16px; color: #222; border-bottom: 2px solid #ddd; padding-bottom: 5px; }
-        .control-group { display: flex; flex-direction: column; gap: 8px; }
         button { 
-            cursor: pointer; padding: 10px; border: none; border-radius: 6px; 
-            background: #222; color: white; font-weight: bold; transition: 0.2s;
+            cursor: pointer; padding: 10px; border: 1px solid #ccc; border-radius: 6px; 
+            background: #fff; color: #333; font-weight: bold;
         }
-        button:hover { background: #444; }
-        button.active { background: #e74c3c; }
-        .btn-toggle { background: #27ae60; }
+        button:hover { background: #f0f0f0; }
+        button.active { background: #ff7f50; color: white; border: none; }
         label { font-size: 13px; color: #444; font-weight: 600; display: flex; justify-content: space-between; }
         input[type="range"] { width: 100%; cursor: pointer; }
-        #stats { font-size: 12px; color: #666; background: #eee; padding: 5px; border-radius: 4px; }
+        #stats { font-size: 12px; color: #666; margin-top: 5px; line-height: 1.6; }
     </style>
 </head>
 <body>
 
 <div id="ui-panel">
-    <h3>암모니아 물리 시뮬레이션</h3>
-    <div class="control-group">
-        <button id="pauseBtn" class="btn-toggle" onclick="togglePause()">⏯ 시뮬레이션 정지/재개</button>
-        <button onclick="changeSourcePos()">📍 발생기 위치 (3곳)</button>
-        <button onclick="changeFanPos()">🌀 환풍기 위치 (3곳)</button>
-        <button onclick="changeCarbonPos()">⬛ 활성탄 위치 (3곳)</button>
+    <h3 style="margin:0; font-size:16px;">화장실 암모니아 시뮬레이션</h3>
+    <div style="display:flex; gap:5px;">
+        <button id="pauseBtn" style="flex:1;" onclick="togglePause()">⏯ 일시정지</button>
     </div>
-    <hr style="border:0; border-top:1px solid #ccc;">
-    <div class="control-group">
-        <label>실시간 입자 생성량 <span id="rateVal">5</span></label>
-        <input type="range" id="spawnRate" min="0" max="50" value="5" oninput="document.getElementById('rateVal').innerText=this.value">
-        <label>공기 저항(확산계수) <span id="frictionVal">0.98</span></label>
-        <input type="range" id="friction" min="90" max="100" value="98" oninput="document.getElementById('frictionVal').innerText=this.value/100">
-    </div>
+    <button onclick="changeFanPos()">🌀 환풍기 위치 변경</button>
+    <button onclick="changeCarbonPos()">⬛ 활성탄 위치 변경</button>
+    <hr style="border:0; border-top:1px solid #ddd;">
+    <label>입자 발생 속도 <span id="rateVal">5</span></label>
+    <input type="range" id="spawnRate" min="0" max="30" value="5" oninput="document.getElementById('rateVal').innerText=this.value">
     <div id="stats">
-        공간: 15m x 10m x 5m<br>
-        현재 암모니아 입자 수: <span id="pCount">0</span>
+        공간: 15(W) x 10(H) x 5(D)<br>
+        구조: 3개 구역 (벽면 설치)<br>
+        입자 수: <span id="pCount">0</span>
     </div>
 </div>
 
@@ -56,113 +49,120 @@
 <script type="module">
     import * as THREE from 'three';
 
-    // 1. 기본 환경 설정 (15 x 10 x 5)
     let isPaused = false;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0a);
+    scene.background = new THREE.Color(0xffffff); // 배경 흰색
+
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // 화장실 외곽선 생성
+    // 1. 공간 및 벽면 생성
     const roomGeo = new THREE.BoxGeometry(15, 10, 5);
-    const roomMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.05, side: THREE.BackSide });
-    const room = new THREE.Mesh(roomGeo, roomMat);
-    scene.add(room);
+    const roomEdges = new THREE.EdgesGeometry(roomGeo);
+    const roomLine = new THREE.LineSegments(roomEdges, new THREE.LineBasicMaterial({ color: 0xaaaaaa }));
+    scene.add(roomLine);
 
-    const edges = new THREE.EdgesGeometry(roomGeo);
-    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x666666 }));
-    scene.add(line);
+    // 칸막이 벽 생성 (두 개의 벽)
+    const wallMat = new THREE.MeshPhongMaterial({ color: 0xdddddd, transparent: true, opacity: 0.5 });
+    const wall1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 6, 5), wallMat);
+    wall1.position.set(-2, -2, 0); // 첫 번째 벽
+    const wall2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 6, 5), wallMat);
+    wall2.position.set(2, -2, 0);  // 두 번째 벽
+    scene.add(wall1, wall2);
+    const walls = [wall1, wall2];
 
     // 2. 장치 설정
-    // 발생기(변기 모형), 환풍기, 활성탄
-    const source = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1, 1, 20), new THREE.MeshPhongMaterial({ color: 0xffffff }));
-    const fan = new THREE.Mesh(new THREE.CircleGeometry(0.8, 32), new THREE.MeshBasicMaterial({ color: 0x00ccff, side: THREE.DoubleSide }));
-    const carbon = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 2), new THREE.MeshPhongMaterial({ color: 0x222222 }));
-    scene.add(source, fan, carbon);
+    // 암모니아 생성기 3개 (4만큼 거리 유지)
+    const sources = [];
+    for(let i=0; i<3; i++) {
+        const s = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.8, 0.8, 16), new THREE.MeshPhongMaterial({ color: 0x444444 }));
+        s.position.set((i - 1) * 4, -4.6, 0); // -4, 0, 4 위치
+        scene.add(s);
+        sources.push(s);
+    }
 
-    // 좌표 설정 (바닥에서 4만큼 떨어진 위치 등 반영)
-    const sPositions = [new THREE.Vector3(-4, -4.5, 0), new THREE.Vector3(0, -4.5, 0), new THREE.Vector3(4, -4.5, 0)];
-    const fPositions = [new THREE.Vector3(6, 4.9, 2), new THREE.Vector3(-6, 4.9, -2), new THREE.Vector3(0, 4.9, 0)];
-    const cPositions = [new THREE.Vector3(4, -4.9, 1), new THREE.Vector3(-4, -4.9, -1), new THREE.Vector3(0, -2, 0)];
-
-    let si=0, fi=0, ci=0;
-    source.position.copy(sPositions[0]);
-    fan.position.copy(fPositions[0]);
+    const fan = new THREE.Mesh(new THREE.CircleGeometry(0.7, 32), new THREE.MeshBasicMaterial({ color: 0x0077ff, side: THREE.DoubleSide }));
+    fan.position.set(0, 4.9, 0);
     fan.rotation.x = Math.PI / 2;
-    carbon.position.copy(cPositions[0]);
+    scene.add(fan);
 
-    // 인터페이스 함수
-    window.togglePause = () => { isPaused = !isPaused; document.getElementById('pauseBtn').classList.toggle('active'); };
-    window.changeSourcePos = () => { si = (si+1)%3; source.position.copy(sPositions[si]); };
+    const carbon = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 2), new THREE.MeshPhongMaterial({ color: 0x333333 }));
+    carbon.position.set(5, -4.8, 0);
+    scene.add(carbon);
+
+    // 장치 위치 변경 제어
+    const fPositions = [new THREE.Vector3(0, 4.9, 0), new THREE.Vector3(6, 4.9, 2), new THREE.Vector3(-6, 4.9, -2)];
+    let fi = 0;
     window.changeFanPos = () => { fi = (fi+1)%3; fan.position.copy(fPositions[fi]); };
-    window.changeCarbonPos = () => { ci = (ci+1)%3; carbon.position.copy(cPositions[ci]); };
+    window.changeCarbonPos = () => { 
+        carbon.position.set((Math.random()-0.5)*12, -4.8, (Math.random()-0.5)*4); 
+    };
+    window.togglePause = () => { isPaused = !isPaused; document.getElementById('pauseBtn').classList.toggle('active'); };
 
     // 조명
-    const light = new THREE.PointLight(0xffffff, 100);
-    light.position.set(0, 8, 0);
-    scene.add(light, new THREE.AmbientLight(0xffffff, 0.5));
+    const sun = new THREE.DirectionalLight(0xffffff, 1);
+    sun.position.set(5, 10, 7.5);
+    scene.add(sun, new THREE.AmbientLight(0xffffff, 0.8));
 
-    camera.position.set(15, 10, 15);
-    camera.lookAt(0, 0, 0);
+    camera.position.set(12, 8, 14);
+    camera.lookAt(0, -1, 0);
 
-    // 3. 암모니아 입자 물리 시스템
+    // 3. 입자 시스템
     const particles = [];
     const pGeo = new THREE.SphereGeometry(0.08, 8, 8);
-    
+    const pMat = new THREE.MeshBasicMaterial({ color: 0xffa500 }); // 주황색 암모니아
+
     function animate() {
         requestAnimationFrame(animate);
         if (isPaused) return;
 
-        // 생성 (개수 조절)
+        // 생성
         const rate = parseInt(document.getElementById('spawnRate').value);
-        for(let i=0; i<rate; i++) {
-            const pMat = new THREE.MeshBasicMaterial({ 
-                color: 0xadff2f, transparent: true, opacity: 0.6 
+        if(rate > 0) {
+            sources.forEach(src => {
+                for(let i=0; i<rate/3; i++) {
+                    const p = new THREE.Mesh(pGeo, pMat.clone());
+                    p.position.copy(src.position).add(new THREE.Vector3(0, 0.5, 0));
+                    p.userData.vel = new THREE.Vector3((Math.random()-0.5)*0.04, 0.03 + Math.random()*0.05, (Math.random()-0.5)*0.04);
+                    scene.add(p);
+                    particles.push(p);
+                }
             });
-            const p = new THREE.Mesh(pGeo, pMat);
-            // 발생기 상단에서 생성
-            p.position.set(
-                source.position.x + (Math.random()-0.5), 
-                source.position.y + 0.5, 
-                source.position.z + (Math.random()-0.5)
-            );
-            // 초기 속도: 암모니아의 가벼운 특성(상승 기류) 반영
-            p.userData.vel = new THREE.Vector3((Math.random()-0.5)*0.05, 0.02 + Math.random()*0.03, (Math.random()-0.5)*0.05);
-            scene.add(p);
-            particles.push(p);
         }
-
-        const friction = parseFloat(document.getElementById('friction').value) / 100;
 
         // 업데이트
         for (let i = particles.length - 1; i >= 0; i--) {
             const p = particles[i];
             
-            // 1. 물리 법칙 적용
-            // 부력 (상승 가속도): 암모니아는 공기보다 가벼움
-            p.userData.vel.y += 0.0015; 
-            // 확산 및 저항
-            p.userData.vel.multiplyScalar(friction);
-            p.position.add(p.userData.vel);
+            // 물리: 부력 및 확산
+            p.userData.vel.y += 0.001; 
+            const nextPos = p.position.clone().add(p.userData.vel);
 
-            // 2. 환풍기 영향 (공기 흐름)
-            const distToFan = p.position.distanceTo(fan.position);
-            if (distToFan < 3.0) {
-                const pull = new THREE.Vector3().subVectors(fan.position, p.position).normalize().multiplyScalar(0.02);
-                p.userData.vel.add(pull);
-            }
-            if (distToFan < 0.7) { // 흡입 성공
+            // 벽 충돌 체크
+            let hitWall = false;
+            walls.forEach(w => {
+                const b = new THREE.Box3().setFromObject(w);
+                if(b.containsPoint(nextPos)) {
+                    p.userData.vel.x *= -0.5; // 반사
+                    hitWall = true;
+                }
+            });
+
+            if(!hitWall) p.position.copy(nextPos);
+            p.userData.vel.multiplyScalar(0.99);
+
+            // 환풍기 흡입
+            if (p.position.distanceTo(fan.position) < 0.8) {
                 scene.remove(p);
                 particles.splice(i, 1);
                 continue;
             }
 
-            // 3. 활성탄 영향 (흡착 및 농도 구배 감소)
-            if (p.position.distanceTo(carbon.position) < 1.5) {
-                p.userData.vel.multiplyScalar(0.5);
-                p.material.opacity -= 0.02;
+            // 활성탄 흡착
+            if (p.position.distanceTo(carbon.position) < 1.2) {
+                p.material.opacity -= 0.05;
                 if(p.material.opacity <= 0) {
                     scene.remove(p);
                     particles.splice(i, 1);
@@ -170,8 +170,8 @@
                 }
             }
 
-            // 4. 경계 조건 (벽면 충돌 및 소멸)
-            if (Math.abs(p.position.x) > 7.5 || p.position.y > 5 || p.position.y < -5 || Math.abs(p.position.z) > 2.5) {
+            // 경계 소멸
+            if (Math.abs(p.position.x) > 7.5 || Math.abs(p.position.y) > 5 || Math.abs(p.position.z) > 2.5) {
                 scene.remove(p);
                 particles.splice(i, 1);
             }
@@ -181,7 +181,6 @@
     }
     animate();
 
-    // 창 크기 조절 대응
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
