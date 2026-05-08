@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Ammonia 3D Simulation Lab</title>
+    <title>Dynamic Ammonia Simulation Lab</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; display: flex; background: #ffffff; color: #333; height: 100vh; }
@@ -42,9 +42,9 @@
 
 <div id="canvas-container">
     <div id="ui-panel">
-        <h3 style="margin:0 0 10px 0; font-size:15px; color:#111;">🧪 물리 엔진 변인 제어</h3>
-        <div class="input-group">암모니아 발생량 <input type="number" id="spawnRate" value="45"></div>
-        <div class="input-group">환풍기 위력 <input type="number" id="fanPower" value="15"></div>
+        <h3 style="margin:0 0 10px 0; font-size:15px; color:#111;">🧪 역동적 물리 엔진 제어</h3>
+        <div class="input-group">암모니아 발생량 <input type="number" id="spawnRate" value="60"></div>
+        <div class="input-group">환풍기 위력 <input type="number" id="fanPower" value="18"></div>
         <div class="input-group">활성탄 흡착 효율 (%) <input type="number" id="carbEff" value="75"></div>
         
         <div style="margin-top:12px;">
@@ -103,9 +103,9 @@
         container.appendChild(renderer.domElement);
 
         // Lights
-        const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+        const ambient = new THREE.AmbientLight(0xffffff, 0.9);
         scene.add(ambient);
-        const sun = new THREE.DirectionalLight(0xffffff, 0.4);
+        const sun = new THREE.DirectionalLight(0xffffff, 0.3);
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
@@ -120,7 +120,7 @@
         // 중앙 칸막이
         wall = new THREE.Mesh(
             new THREE.BoxGeometry(0.2, 7, 10),
-            new THREE.MeshPhongMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.3 })
+            new THREE.MeshPhongMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.2 }) // 더 투명하게
         );
         wall.position.set(0, -1.5, 0);
         scene.add(wall);
@@ -146,7 +146,7 @@
         for(let i=0; i<3; i++) {
             const s = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.5, 0.6, 0.3, 16),
-                new THREE.MeshPhongMaterial({ color: 0xcccccc })
+                new THREE.MeshPhongMaterial({ color: 0xbbbbbb })
             );
             s.position.set(7, -4.8, (i-1)*5);
             scene.add(s);
@@ -181,23 +181,29 @@
         requestAnimationFrame(animate);
 
         const spawnRate = parseFloat(document.getElementById('spawnRate').value);
-        const fanPower = parseFloat(document.getElementById('fanPower').value) * 0.0008;
+        const fanPower = parseFloat(document.getElementById('fanPower').value) * 0.0009; // 인력 살짝 강화
         const carbEff = parseFloat(document.getElementById('carbEff').value) / 100;
 
-        // 입자 생성 (암모니아)
+        // --- 입자 생성 (핵심 수정: 무작위성 강화) ---
         if(Math.random() < spawnRate/100) {
             const s = sources[Math.floor(Math.random()*3)];
             const p = new THREE.Mesh(
                 new THREE.SphereGeometry(0.12, 8, 8),
-                new THREE.MeshBasicMaterial({ color: 0xffbb33, transparent: true, opacity: 0.6 })
+                new THREE.MeshBasicMaterial({ color: 0xffa000, transparent: true, opacity: 0.5 }) // 색상 변경
             );
             p.position.copy(s.position).add(new THREE.Vector3(0, 0.5, 0));
-            p.userData.vel = new THREE.Vector3((Math.random()-0.5)*0.25, 0.05, (Math.random()-0.5)*0.25);
+            
+            // 핵심 수정: 초기 속도를 위쪽뿐만 아니라 사방팔방으로 강하게 터지도록 설정 (X, Z 무작위성 대폭 강화)
+            p.userData.vel = new THREE.Vector3(
+                (Math.random()-0.5)*0.6, // 가로 무작위 폭발
+                0.02 + Math.random()*0.1, // 위쪽 기본 속도
+                (Math.random()-0.5)*0.6  // 앞뒤 무작위 폭발
+            );
             scene.add(p);
             particles.push(p);
         }
 
-        // 입자 물리 업데이트
+        // --- 입자 물리 업데이트 (역동성 강화) ---
         for (let i = particles.length - 1; i >= 0; i--) {
             const p = particles[i];
             const v = p.userData.vel;
@@ -211,23 +217,26 @@
                 if(p.material.opacity <= 0) { removedCarb++; scene.remove(p); particles.splice(i, 1); continue; }
             }
 
-            // 2. 부력 + 확산 + 공기 저항
-            v.y += 0.0012; // 부력
-            v.x += (Math.random()-0.5)*0.02;
-            v.z += (Math.random()-0.5)*0.02;
+            // 2. 물리 밸런스 조정 (위로만 가는 경향 완화)
+            v.y += 0.0011; // 부력 살짝 낮춤 (천장 정체 완화)
+            v.x += (Math.random()-0.5)*0.035; // 무작위 확산 강화 (불규칙한 움직임)
+            v.z += (Math.random()-0.5)*0.035;
             
             // 3. 환풍기 인력
             const d = p.position.distanceTo(fan.position);
-            if(d < 8) v.add(new THREE.Vector3().subVectors(fan.position, p.position).normalize().multiplyScalar(fanPower));
+            if(d < 9) v.add(new THREE.Vector3().subVectors(fan.position, p.position).normalize().multiplyScalar(fanPower * (9/d)));
 
             p.position.add(v);
-            v.multiplyScalar(0.97); // 공기 저항 (속도 감쇄)
+            v.multiplyScalar(0.985); // 공기 저항 (속도 감쇄)
 
-            // 4. 벽 충돌 (탄성 계수 낮춤)
+            // 4. 벽 충돌 (탄성 계수 최적화 - 골고루 튕기게)
             const lx=9.8, ly=4.8, lz=7.3;
-            if(Math.abs(p.position.x)>lx) { v.x *= -0.3; p.position.x=Math.sign(p.position.x)*lx; }
-            if(Math.abs(p.position.y)>ly) { v.y *= -0.3; p.position.y=Math.sign(p.position.y)*ly; }
-            if(Math.abs(p.position.z)>lz) { v.z *= -0.3; p.position.z=Math.sign(p.position.z)*lz; }
+            if(Math.abs(p.position.x)>lx) { v.x *= -0.35; p.position.x=Math.sign(p.position.x)*lx; }
+            if(Math.abs(p.position.y)>ly) { v.y *= -0.35; p.position.y=Math.sign(p.position.y)*ly; }
+            if(Math.abs(p.position.z)>lz) { v.z *= -0.35; p.position.z=Math.sign(p.position.z)*lz; }
+            
+            const wallBox = new THREE.Box3().setFromObject(wall);
+            if(wallBox.containsPoint(p.position)) { v.x *= -0.35; p.position.x += v.x*2; }
         }
 
         // 데이터 UI 업데이트
