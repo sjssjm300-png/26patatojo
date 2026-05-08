@@ -1,239 +1,51 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Ammonia Physical Simulation</title>
-    <style>
-        body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; display: flex; background: #fff; }
-        #canvas-container { flex: 1; position: relative; }
-        #data-panel { 
-            width: 320px; background: #f8f9fa; border-left: 1px solid #ddd; 
-            padding: 20px; display: flex; flex-direction: column; gap: 15px;
-            overflow-y: auto; z-index: 101;
-        }
-        #ui-panel {
-            position: absolute; top: 15px; left: 15px;
-            background: rgba(255, 255, 255, 0.95); padding: 15px;
-            border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            display: flex; flex-direction: column; gap: 12px; width: 260px; z-index: 100;
-        }
-        .input-group { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-        .input-group label { font-size: 11px; font-weight: bold; color: #444; }
-        input[type="number"] { width: 60px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
-        button { cursor: pointer; padding: 8px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-weight: bold; font-size: 11px; }
-        .chart-container { background: #fff; border: 1px solid #eee; padding: 10px; border-radius: 8px; }
-        canvas.chart-canvas { width: 100%; height: 110px; background: #fafafa; }
-    </style>
-</head>
-<body>
+/*
+ * [화장실 악취 저감을 위한 흡착제 필터 연구]
+ * 대상: 이지메이커 가스 센서 (MQ-135 소자 기반)
+ * 기능: 농도 구배에 따른 확산 및 흡착 효율 실시간 모니터링
+ */
 
-<div id="canvas-container">
-    <div id="ui-panel">
-        <b style="color:#222; font-size:14px;">🔬 물리 변인 통제 제어판</b>
-        
-        <div class="input-group">
-            <label>암모니아 발생량 (0-100)</label>
-            <input type="number" id="spawnRate" value="35" min="0" max="100">
-        </div>
+const int sensorPin = A0;   // 이지메이커 센서 아날로그 핀
+float Ro = 10.0;            // 깨끗한 공기에서의 초기 저항값 (실험 전 보정 필요)
 
-        <div class="input-group">
-            <label>🌀 환풍구 흡입 위력 (0-50)</label>
-            <input type="number" id="fanPower" value="10" min="0" max="50">
-        </div>
+void setup() {
+  Serial.begin(9600);
+  Serial.println("--- 암모니아 흡착 실험 데이터 로깅 시작 ---");
+  Serial.println("시간(sec), 전압(V), 농도비(Rs/Ro)");
+  
+  // 센서 예열 알림 (최소 5분 권장)
+  delay(1000); 
+}
 
-        <div class="input-group">
-            <label>⬛ 활성탄 흡착 효율 (%)</label>
-            <input type="number" id="carbEff" value="60" min="0" max="100">
-        </div>
+void loop() {
+  // 1. 데이터 평활화 (노이즈 제거를 위해 10번 읽어 평균 계산)
+  long sum = 0;
+  for(int i=0; i<10; i++) {
+    sum += analogRead(sensorPin);
+    delay(10);
+  }
+  float sensorValue = sum / 10.0;
 
-        <button onclick="changeFanPos()">🌀 환풍구 위치 변경</button>
-        <button onclick="resetSim()" style="background:#ffeeee; border-color:#ffcccc;">🔄 시뮬레이션 초기화</button>
-        <div style="font-size:10px; color:#888;">* 벽면 충돌 및 기체 확산 물리 적용됨</div>
-    </div>
-</div>
+  // 2. 전압값 변환 (0~5V)
+  float voltage = sensorValue * (5.0 / 1023.0);
 
-<div id="data-panel">
-    <h3 style="margin:0; font-size:17px;">분석 리포트</h3>
-    
-    <div class="chart-container">
-        <span style="font-size:12px; font-weight:bold;">📈 실시간 잔류 농도 추이</span>
-        <canvas id="concChart" class="chart-canvas"></canvas>
-    </div>
+  // 3. 센서 저항(Rs) 계산 
+  // RL(부하저항)은 모듈 특성에 따라 다르지만 보통 10kOhm 내외
+  float Rs = ((5.0 * 10.0) / voltage) - 10.0;
 
-    <div class="chart-container">
-        <span style="font-size:12px; font-weight:bold;">📊 누적 제거 성과</span>
-        <div style="font-size:11px; color:#555; margin:8px 0;">
-            배출(Fan): <span id="fanCount" style="color:#00aaff; font-weight:bold;">0</span> | 
-            흡착(Carbon): <span id="carbCount" style="color:#333; font-weight:bold;">0</span>
-        </div>
-        <canvas id="effChart" class="chart-canvas"></canvas>
-    </div>
-</div>
+  // 4. 농도비 계산 (Rs/Ro)
+  // 확산에 의해 농도가 변하면 이 비율이 가파르게 변함
+  float ratio = Rs / Ro;
 
-<script type="importmap">
-    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
-</script>
+  // 5. 시리얼 플로터용 데이터 출력
+  // 엑셀에 붙여넣기 좋게 콤마(,)로 구분
+  Serial.print(millis() / 1000); // 경과 시간(초)
+  Serial.print(", ");
+  Serial.print(voltage);         // 전압 변화 (확산도 관찰용)
+  Serial.print(", ");
+  Serial.println(ratio);         // 흡착 효율 지표
 
-<script type="module">
-    import * as THREE from 'three';
-
-    const container = document.getElementById('canvas-container');
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xffffff);
-    const camera = new THREE.PerspectiveCamera(60, container.clientWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(container.clientWidth, window.innerHeight);
-    container.appendChild(renderer.domElement);
-
-    let totalGenerated = 0, removedByFan = 0, removedByCarbon = 0;
-    const particles = [];
-
-    // 1. 공간 및 벽(Wall) 설치
-    const roomGeo = new THREE.BoxGeometry(20, 10, 15);
-    const roomLine = new THREE.LineSegments(new THREE.EdgesGeometry(roomGeo), new THREE.LineBasicMaterial({ color: 0x444444 }));
-    scene.add(roomLine);
-
-    // 생성기 사이 칸막이 벽
-    const wallMat = new THREE.MeshPhongMaterial({ color: 0xcccccc, transparent: true, opacity: 0.6 });
-    const wall1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 8, 8), wallMat);
-    wall1.position.set(-3, -1, 3);
-    const wall2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 8, 8), wallMat);
-    wall2.position.set(3, -1, 3);
-    scene.add(wall1, wall2);
-    const walls = [wall1, wall2];
-
-    // 2. 장치 설정
-    const fan = new THREE.Mesh(new THREE.CircleGeometry(1.2, 32), new THREE.MeshBasicMaterial({ color: 0x00aaff, side: THREE.DoubleSide }));
-    const fanPos = [new THREE.Vector3(-9.95, 3.5, 0), new THREE.Vector3(9.95, 3.5, 0), new THREE.Vector3(0, 3.5, -7.45)];
-    let fi = 0;
-    fan.position.copy(fanPos[0]); fan.rotation.y = Math.PI/2;
-    scene.add(fan);
-
-    const carbon = new THREE.Mesh(new THREE.BoxGeometry(6, 0.2, 6), new THREE.MeshPhongMaterial({ color: 0x222222 }));
-    carbon.position.set(6, 4.8, -2);
-    scene.add(carbon);
-
-    const sources = [];
-    for(let i=0; i<3; i++) {
-        const s = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 0.8, 16), new THREE.MeshPhongMaterial({ color: 0x777777 }));
-        s.position.set((i-1)*7, -4.6, 4);
-        scene.add(s);
-        sources.push(s);
-    }
-
-    scene.add(new THREE.DirectionalLight(0xffffff, 1), new THREE.AmbientLight(0xffffff, 0.7));
-    camera.position.set(22, 14, 22);
-    camera.lookAt(0, 0, 0);
-
-    // 3. 그래프 데이터
-    const concCtx = document.getElementById('concChart').getContext('2d');
-    const effCtx = document.getElementById('effChart').getContext('2d');
-    let history = new Array(60).fill(0);
-
-    function updateCharts() {
-        concCtx.clearRect(0, 0, 320, 110);
-        concCtx.beginPath(); concCtx.strokeStyle = '#ff4500'; concCtx.lineWidth = 2;
-        history.push(particles.length); history.shift();
-        for(let i=0; i<60; i++) {
-            let x = (i/60)*320, y = 110 - (history[i]/1200)*110;
-            if(i===0) concCtx.moveTo(x, y); else concCtx.lineTo(x, y);
-        }
-        concCtx.stroke();
-
-        document.getElementById('fanCount').innerText = removedByFan;
-        document.getElementById('carbCount').innerText = removedByCarbon;
-        effCtx.clearRect(0, 0, 320, 110);
-        const maxVal = Math.max(removedByFan, removedByCarbon, 1);
-        effCtx.fillStyle = '#00aaff'; effCtx.fillRect(60, 110, 50, -(removedByFan/maxVal)*90);
-        effCtx.fillStyle = '#222222'; effCtx.fillRect(160, 110, 50, -(removedByCarbon/maxVal)*90);
-    }
-
-    // 4. 기체 입자 물리 엔진
-    const pGeo = new THREE.SphereGeometry(0.1, 6, 6);
-    const pMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.8 });
-
-    function animate() {
-        requestAnimationFrame(animate);
-
-        const rate = parseFloat(document.getElementById('spawnRate').value);
-        const fPowVal = parseFloat(document.getElementById('fanPower').value) * 0.001;
-        const cEffVal = parseFloat(document.getElementById('carbEff').value) / 100;
-
-        sources.forEach(src => {
-            if(Math.random() < rate/120) {
-                const p = new THREE.Mesh(pGeo, pMat.clone());
-                p.position.copy(src.position).add(new THREE.Vector3(0, 0.6, 0));
-                // 초기 속도: 확산을 위해 무작위성 강화
-                p.userData.vel = new THREE.Vector3((Math.random()-0.5)*0.2, 0.05 + Math.random()*0.1, (Math.random()-0.5)*0.2);
-                scene.add(p);
-                particles.push(p);
-                totalGenerated++;
-            }
-        });
-
-        for (let i = particles.length - 1; i >= 0; i--) {
-            const p = particles[i];
-            
-            // 환풍구 흡입
-            const dFan = p.position.distanceTo(fan.position);
-            if(dFan < 9) {
-                p.userData.vel.add(new THREE.Vector3().subVectors(fan.position, p.position).normalize().multiplyScalar(fPowVal * (9/dFan)));
-            }
-            if(dFan < 1.1) {
-                removedByFan++; scene.remove(p); particles.splice(i, 1); continue;
-            }
-
-            // 활성탄 흡착
-            const dCarb = p.position.distanceTo(carbon.position);
-            if(dCarb < 2.8) {
-                if(Math.random() < cEffVal * 0.15) {
-                    p.material.opacity -= 0.1;
-                    p.userData.vel.multiplyScalar(0.4);
-                    if(p.material.opacity <= 0) {
-                        removedByCarbon++; scene.remove(p); particles.splice(i, 1); continue;
-                    }
-                }
-            }
-
-            // 암모니아 물리 특성 (강한 부력 및 지속 확산)
-            p.userData.vel.y += 0.002; 
-            p.userData.vel.x += (Math.random()-0.5)*0.01; // 브라운 운동
-            p.userData.vel.z += (Math.random()-0.5)*0.01;
-            
-            p.position.add(p.userData.vel);
-            p.userData.vel.multiplyScalar(0.99); // 공기 저항
-
-            // 벽면 충돌 (칸막이 벽)
-            walls.forEach(w => {
-                const bx = new THREE.Box3().setFromObject(w);
-                if(bx.containsPoint(p.position)) {
-                    p.userData.vel.x *= -0.8; // 튕겨나옴
-                    p.position.x += p.userData.vel.x * 2;
-                }
-            });
-
-            // 외벽 반사
-            if(Math.abs(p.position.x) > 9.8) { p.userData.vel.x *= -0.7; p.position.x = Math.sign(p.position.x)*9.7; }
-            if(p.position.y > 4.8) { p.userData.vel.y *= -0.7; p.position.y = 4.7; }
-            if(p.position.y < -4.8) { p.userData.vel.y *= -0.7; p.position.y = -4.7; }
-            if(Math.abs(p.position.z) > 7.3) { p.userData.vel.z *= -0.7; p.position.z = Math.sign(p.position.z)*7.2; }
-        }
-        updateCharts();
-        renderer.render(scene, camera);
-    }
-
-    window.changeFanPos = () => { 
-        fi = (fi + 1) % 3; fan.position.copy(fanPos[fi]); 
-        fan.rotation.y = (fi === 2) ? 0 : Math.PI/2;
-    };
-    window.resetSim = () => {
-        particles.forEach(p => scene.remove(p));
-        particles.length = 0; totalGenerated = 0; removedByFan = 0; removedByCarbon = 0;
-        history.fill(0);
-    };
-
-    animate();
-</script>
-</body>
-</html>
+  // 6. 측정 주기 설정
+  // 농도 구배에 따른 확산을 관찰하려면 너무 빠르지도, 느리지도 않은 주기가 중요
+  // 초기 5분은 10초 단위, 이후는 30초 단위로 데이터 로깅 권장
+  delay(10000); 
+}
