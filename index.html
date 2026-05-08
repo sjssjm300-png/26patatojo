@@ -1,58 +1,120 @@
-#include <Servo.h>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>암모니아 흡착 및 확산 제어 시스템</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { border-bottom: 2px solid #2ecc71; padding-bottom: 10px; color: #27ae60; }
+        
+        .status-panel { display: flex; justify-content: space-between; margin: 20px 0; }
+        .card { flex: 1; padding: 15px; margin: 5px; background: #e8f5e9; border-radius: 10px; text-align: center; }
+        .card h3 { margin: 0; font-size: 14px; color: #666; }
+        .card p { font-size: 24px; font-weight: bold; margin: 10px 0; color: #2e7d32; }
 
-// 핀 설정
-const int sensorPin = A0;   // 이지메이커 가스 센서
-const int servoPin = 9;     // 서보모터 (출입구 제어)
+        .control-panel { text-align: center; margin-top: 20px; }
+        button { padding: 12px 25px; font-size: 16px; cursor: pointer; border: none; border-radius: 8px; transition: 0.3s; margin: 5px; }
+        .btn-connect { background: #3498db; color: white; }
+        .btn-open { background: #e67e22; color: white; }
+        .btn-close { background: #95a5a6; color: white; }
+        button:hover { opacity: 0.8; }
 
-// 필터 및 데이터 관련 변수
-float alpha = 0.1;          // EMA 필터 계수 (낮을수록 부드러움)
-float filteredValue = 0;
-float Ro = 10.0;            // 깨끗한 공기 기준 저항값
+        #dataLog { width: 100%; height: 200px; background: #2c3e50; color: #ecf0f1; border-radius: 8px; padding: 10px; overflow-y: auto; font-family: monospace; font-size: 12px; margin-top: 20px; }
+    </style>
+</head>
+<body>
 
-// 출입구 제어 변수
-Servo myServo;
-bool isOpen = false;
-const int openAngle = 90;   // 문 열림 각도
-const int closeAngle = 0;   // 문 닫힘 각도
+<div class="container">
+    <h2>Ammonia Diffusion Control System</h2>
+    
+    <div class="status-panel">
+        <div class="card">
+            <h3>현재 전압 (필터 적용)</h3>
+            <p id="voltVal">0.00 V</p>
+        </div>
+        <div class="card">
+            <h3>흡착 효율 (Rs/Ro)</h3>
+            <p id="ratioVal">0.00</p>
+        </div>
+        <div class="card">
+            <h3>출입구 상태</h3>
+            <p id="gateStatus">CLOSED</p>
+        </div>
+    </div>
 
-void setup() {
-  Serial.begin(9600);
-  myServo.attach(servoPin);
-  myServo.write(closeAngle); // 시작 시 문 닫음
-  
-  filteredValue = analogRead(sensorPin);
-  
-  Serial.println("Time(s),Voltage,Rs_Ro_Ratio,Gate_Status");
-}
+    <div class="control-panel">
+        <button class="btn-connect" onclick="connectSerial()">아두이노 연결</button>
+        <button class="btn-open" onclick="sendCommand('O')">출입구 열기 (Open)</button>
+        <button class="btn-close" onclick="sendCommand('C')">출입구 닫기 (Close)</button>
+    </div>
 
-void loop() {
-  // 1. 센서 값 읽기 및 EMA 필터 (방방 뜨는 값 보정)
-  int rawRead = analogRead(sensorPin);
-  filteredValue = (rawRead * alpha) + (filteredValue * (1.0 - alpha));
+    <div id="dataLog">시스템 메시지: 아두이노를 연결해주세요...</div>
+</div>
 
-  // 2. 물리적 수치 변환
-  float voltage = filteredValue * (5.0 / 1023.0);
-  float Rs = ((5.0 * 10.0) / (voltage + 0.001)) - 10.0; // 0나누기 방지
-  float ratio = Rs / Ro;
+<script>
+    let port;
+    let reader;
+    let writer;
+    let alpha = 0.1; // 기체 요동 방지를 위한 EMA 필터 계수
+    let filteredVolt = 0;
 
-  // 3. 출입구 제어 로직 (예시: 농도 전압이 3.0V를 넘으면 환기 위해 개방)
-  // 실험 목적에 따라 "if (millis() > 60000)" 처럼 시간제로 바꿔도 됩니다.
-  if (voltage > 3.0 && !isOpen) {
-    myServo.write(openAngle);
-    isOpen = true;
-  } else if (voltage <= 1.5 && isOpen) {
-    myServo.write(closeAngle);
-    isOpen = false;
-  }
+    async function connectSerial() {
+        try {
+            port = await navigator.serial.requestPort();
+            await port.open({ baudRate: 9600 });
+            
+            const textEncoder = new TextEncoderStream();
+            const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
+            writer = textEncoder.writable.getWriter();
 
-  // 4. 시리얼 모니터 출력 (엑셀 데이터용)
-  Serial.print(millis() / 1000);
-  Serial.print(",");
-  Serial.print(voltage);
-  Serial.print(",");
-  Serial.print(ratio);
-  Serial.print(",");
-  Serial.println(isOpen ? "OPEN" : "CLOSED");
+            document.getElementById('dataLog').innerHTML += "<br>▶ 아두이노 연결 성공!";
+            readData();
+        } catch (e) {
+            console.error(e);
+            alert("연결 실패: 크롬 브라우저를 사용하거나 포트를 확인하세요.");
+        }
+    }
 
-  delay(1000); // 1초 단위 로깅
-}
+    async function readData() {
+        const textDecoder = new TextDecoderStream();
+        const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+        reader = textDecoder.readable.getReader();
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (value) {
+                // 아두이노에서 보낸 Raw 데이터를 필터링
+                let rawVolt = parseFloat(value);
+                if (!isNaN(rawVolt)) {
+                    // EMA 필터: 방방 뛰는 기체 데이터 안정화
+                    filteredVolt = (rawVolt * alpha) + (filteredVolt * (1 - alpha));
+                    updateUI(filteredVolt);
+                }
+            }
+        }
+    }
+
+    function updateUI(volt) {
+        document.getElementById('voltVal').innerText = volt.toFixed(2) + " V";
+        // 간이 Rs/Ro 계산 (실험 기준값 반영)
+        let ratio = (5.0 / (volt + 0.001)) - 1; 
+        document.getElementById('ratioVal').innerText = ratio.toFixed(2);
+        
+        let log = document.getElementById('dataLog');
+        log.innerHTML += `<br>[${new Date().toLocaleTimeString()}] 전압: ${volt.toFixed(2)}V`;
+        log.scrollTop = log.scrollHeight;
+    }
+
+    async function sendCommand(cmd) {
+        if (writer) {
+            await writer.write(cmd);
+            document.getElementById('gateStatus').innerText = (cmd === 'O') ? "OPEN" : "CLOSED";
+            document.getElementById('dataLog').innerHTML += `<br>명령 전송: ${cmd === 'O' ? '문 열기' : '문 닫기'}`;
+        }
+    }
+</script>
+
+</body>
+</html>
