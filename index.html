@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Closed System Ammonia Simulation</title>
+    <title>Advanced Ammonia Physical Simulation</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Pretendard', sans-serif; display: flex; background: #fff; }
         #canvas-container { flex: 1; position: relative; }
@@ -16,55 +16,56 @@
             position: absolute; top: 15px; left: 15px;
             background: rgba(255, 255, 255, 0.95); padding: 15px;
             border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            display: flex; flex-direction: column; gap: 12px; width: 250px; z-index: 100;
+            display: flex; flex-direction: column; gap: 12px; width: 260px; z-index: 100;
         }
-        .ctrl-group { display: flex; flex-direction: column; gap: 5px; }
-        .ctrl-group label { font-size: 11px; font-weight: bold; color: #555; }
+        .input-group { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .input-group label { font-size: 11px; font-weight: bold; color: #444; }
+        input[type="number"] { width: 60px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
         button { cursor: pointer; padding: 8px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-weight: bold; font-size: 11px; }
         .chart-container { background: #fff; border: 1px solid #eee; padding: 10px; border-radius: 8px; }
         canvas.chart-canvas { width: 100%; height: 110px; background: #fafafa; }
-        .val-display { float: right; color: #ff4500; }
     </style>
 </head>
 <body>
 
 <div id="canvas-container">
     <div id="ui-panel">
-        <b style="color:#222; font-size:14px;">🛠 시뮬레이션 환경 설정</b>
+        <b style="color:#222; font-size:14px;">🔬 물리 변인 통제 제어판</b>
         
-        <div class="ctrl-group">
-            <label>암모니아 발생 강도 <span id="v-spawn" class="val-display">30</span></label>
-            <input type="range" id="spawnRate" min="0" max="100" value="30" oninput="document.getElementById('v-spawn').innerText=this.value">
+        <div class="input-group">
+            <label>암모니아 발생량 (0-100)</label>
+            <input type="number" id="spawnRate" value="35" min="0" max="100">
         </div>
 
-        <div class="ctrl-group">
-            <label>🌀 환풍구 흡입 위력 <span id="v-fan" class="val-display">5</span></label>
-            <input type="range" id="fanPower" min="0" max="20" value="5" oninput="document.getElementById('v-fan').innerText=this.value">
+        <div class="input-group">
+            <label>🌀 환풍구 흡입 위력 (0-50)</label>
+            <input type="number" id="fanPower" value="10" min="0" max="50">
         </div>
 
-        <div class="ctrl-group">
-            <label>⬛ 활성탄 흡착 효율 <span id="v-carb" class="val-display">50</span>%</label>
-            <input type="range" id="carbEff" min="0" max="100" value="50" oninput="document.getElementById('v-carb').innerText=this.value">
+        <div class="input-group">
+            <label>⬛ 활성탄 흡착 효율 (%)</label>
+            <input type="number" id="carbEff" value="60" min="0" max="100">
         </div>
 
-        <button onclick="changeFanPos()">🌀 환풍구 위치 변경 (벽면 3곳)</button>
-        <button onclick="resetSim()" style="background:#ffeeee; border-color:#ffcccc;">🔄 데이터 리셋</button>
+        <button onclick="changeFanPos()">🌀 환풍구 위치 변경</button>
+        <button onclick="resetSim()" style="background:#ffeeee; border-color:#ffcccc;">🔄 시뮬레이션 초기화</button>
+        <div style="font-size:10px; color:#888;">* 벽면 충돌 및 기체 확산 물리 적용됨</div>
     </div>
 </div>
 
 <div id="data-panel">
-    <h3 style="margin:0; font-size:17px;">실시간 분석 모니터</h3>
+    <h3 style="margin:0; font-size:17px;">분석 리포트</h3>
     
     <div class="chart-container">
-        <span style="font-size:12px; font-weight:bold;">📈 공간 내 잔류 농도 (ppm)</span>
+        <span style="font-size:12px; font-weight:bold;">📈 실시간 잔류 농도 추이</span>
         <canvas id="concChart" class="chart-canvas"></canvas>
     </div>
 
     <div class="chart-container">
-        <span style="font-size:12px; font-weight:bold;">📊 누적 제거량 비교</span>
+        <span style="font-size:12px; font-weight:bold;">📊 누적 제거 성과</span>
         <div style="font-size:11px; color:#555; margin:8px 0;">
-            환풍 배출: <span id="fanCount">0</span> <br>
-            탄소 흡착: <span id="carbCount">0</span>
+            배출(Fan): <span id="fanCount" style="color:#00aaff; font-weight:bold;">0</span> | 
+            흡착(Carbon): <span id="carbCount" style="color:#333; font-weight:bold;">0</span>
         </div>
         <canvas id="effChart" class="chart-canvas"></canvas>
     </div>
@@ -88,40 +89,44 @@
     let totalGenerated = 0, removedByFan = 0, removedByCarbon = 0;
     const particles = [];
 
-    // 20(가로) x 10(높이) x 15(폭) 밀폐 박스
+    // 1. 공간 및 벽(Wall) 설치
     const roomGeo = new THREE.BoxGeometry(20, 10, 15);
-    const roomMat = new THREE.MeshPhongMaterial({ color: 0xeeeeee, side: THREE.BackSide, transparent: true, opacity: 0.5 });
-    const room = new THREE.Mesh(roomGeo, roomMat);
-    scene.add(room);
-
     const roomLine = new THREE.LineSegments(new THREE.EdgesGeometry(roomGeo), new THREE.LineBasicMaterial({ color: 0x444444 }));
     scene.add(roomLine);
 
-    // 장치 설정
+    // 생성기 사이 칸막이 벽
+    const wallMat = new THREE.MeshPhongMaterial({ color: 0xcccccc, transparent: true, opacity: 0.6 });
+    const wall1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 8, 8), wallMat);
+    wall1.position.set(-3, -1, 3);
+    const wall2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 8, 8), wallMat);
+    wall2.position.set(3, -1, 3);
+    scene.add(wall1, wall2);
+    const walls = [wall1, wall2];
+
+    // 2. 장치 설정
     const fan = new THREE.Mesh(new THREE.CircleGeometry(1.2, 32), new THREE.MeshBasicMaterial({ color: 0x00aaff, side: THREE.DoubleSide }));
-    const fanPos = [new THREE.Vector3(-9.95, 3, 0), new THREE.Vector3(9.95, 3, 0), new THREE.Vector3(0, 3, -7.45)];
+    const fanPos = [new THREE.Vector3(-9.95, 3.5, 0), new THREE.Vector3(9.95, 3.5, 0), new THREE.Vector3(0, 3.5, -7.45)];
     let fi = 0;
-    fan.position.copy(fanPos[0]);
-    fan.rotation.y = Math.PI/2;
+    fan.position.copy(fanPos[0]); fan.rotation.y = Math.PI/2;
     scene.add(fan);
 
-    const carbon = new THREE.Mesh(new THREE.BoxGeometry(5, 0.3, 5), new THREE.MeshPhongMaterial({ color: 0x222222 }));
-    carbon.position.set(5, 4.8, 0);
+    const carbon = new THREE.Mesh(new THREE.BoxGeometry(6, 0.2, 6), new THREE.MeshPhongMaterial({ color: 0x222222 }));
+    carbon.position.set(6, 4.8, -2);
     scene.add(carbon);
 
     const sources = [];
     for(let i=0; i<3; i++) {
-        const s = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 1, 16), new THREE.MeshPhongMaterial({ color: 0x666666 }));
-        s.position.set((i-1)*6, -4.5, 3);
+        const s = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 0.8, 16), new THREE.MeshPhongMaterial({ color: 0x777777 }));
+        s.position.set((i-1)*7, -4.6, 4);
         scene.add(s);
         sources.push(s);
     }
 
-    scene.add(new THREE.DirectionalLight(0xffffff, 1.2), new THREE.AmbientLight(0xffffff, 0.6));
-    camera.position.set(22, 12, 22);
+    scene.add(new THREE.DirectionalLight(0xffffff, 1), new THREE.AmbientLight(0xffffff, 0.7));
+    camera.position.set(22, 14, 22);
     camera.lookAt(0, 0, 0);
 
-    // 그래프
+    // 3. 그래프 데이터
     const concCtx = document.getElementById('concChart').getContext('2d');
     const effCtx = document.getElementById('effChart').getContext('2d');
     let history = new Array(60).fill(0);
@@ -131,7 +136,7 @@
         concCtx.beginPath(); concCtx.strokeStyle = '#ff4500'; concCtx.lineWidth = 2;
         history.push(particles.length); history.shift();
         for(let i=0; i<60; i++) {
-            let x = (i/60)*320, y = 110 - (history[i]/1000)*110;
+            let x = (i/60)*320, y = 110 - (history[i]/1200)*110;
             if(i===0) concCtx.moveTo(x, y); else concCtx.lineTo(x, y);
         }
         concCtx.stroke();
@@ -144,62 +149,75 @@
         effCtx.fillStyle = '#222222'; effCtx.fillRect(160, 110, 50, -(removedByCarbon/maxVal)*90);
     }
 
-    const pGeo = new THREE.SphereGeometry(0.12, 6, 6);
+    // 4. 기체 입자 물리 엔진
+    const pGeo = new THREE.SphereGeometry(0.1, 6, 6);
     const pMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.8 });
 
     function animate() {
         requestAnimationFrame(animate);
 
-        // 1. 암모니아 대량 발생
-        const rate = parseInt(document.getElementById('spawnRate').value);
+        const rate = parseFloat(document.getElementById('spawnRate').value);
+        const fPowVal = parseFloat(document.getElementById('fanPower').value) * 0.001;
+        const cEffVal = parseFloat(document.getElementById('carbEff').value) / 100;
+
         sources.forEach(src => {
-            if(Math.random() < rate/100) {
+            if(Math.random() < rate/120) {
                 const p = new THREE.Mesh(pGeo, pMat.clone());
-                p.position.copy(src.position).add(new THREE.Vector3(0, 0.8, 0));
-                p.userData.vel = new THREE.Vector3((Math.random()-0.5)*0.1, 0.05 + Math.random()*0.05, (Math.random()-0.5)*0.1);
+                p.position.copy(src.position).add(new THREE.Vector3(0, 0.6, 0));
+                // 초기 속도: 확산을 위해 무작위성 강화
+                p.userData.vel = new THREE.Vector3((Math.random()-0.5)*0.2, 0.05 + Math.random()*0.1, (Math.random()-0.5)*0.2);
                 scene.add(p);
                 particles.push(p);
                 totalGenerated++;
             }
         });
 
-        const fPow = parseFloat(document.getElementById('fanPower').value) * 0.001;
-        const cEff = parseFloat(document.getElementById('carbEff').value) / 100;
-
         for (let i = particles.length - 1; i >= 0; i--) {
             const p = particles[i];
             
             // 환풍구 흡입
             const dFan = p.position.distanceTo(fan.position);
-            if(dFan < 8) {
-                p.userData.vel.add(new THREE.Vector3().subVectors(fan.position, p.position).normalize().multiplyScalar(fPow * (8/dFan)));
+            if(dFan < 9) {
+                p.userData.vel.add(new THREE.Vector3().subVectors(fan.position, p.position).normalize().multiplyScalar(fPowVal * (9/dFan)));
             }
-            if(dFan < 1.0) {
+            if(dFan < 1.1) {
                 removedByFan++; scene.remove(p); particles.splice(i, 1); continue;
             }
 
             // 활성탄 흡착
             const dCarb = p.position.distanceTo(carbon.position);
-            if(dCarb < 2.5) {
-                if(Math.random() < cEff * 0.1) {
+            if(dCarb < 2.8) {
+                if(Math.random() < cEffVal * 0.15) {
                     p.material.opacity -= 0.1;
-                    p.userData.vel.multiplyScalar(0.5);
+                    p.userData.vel.multiplyScalar(0.4);
                     if(p.material.opacity <= 0) {
                         removedByCarbon++; scene.remove(p); particles.splice(i, 1); continue;
                     }
                 }
             }
 
-            // 물리 및 밀폐 공간 반사
-            p.userData.vel.y += 0.0015; // 부력
+            // 암모니아 물리 특성 (강한 부력 및 지속 확산)
+            p.userData.vel.y += 0.002; 
+            p.userData.vel.x += (Math.random()-0.5)*0.01; // 브라운 운동
+            p.userData.vel.z += (Math.random()-0.5)*0.01;
+            
             p.position.add(p.userData.vel);
-            p.userData.vel.multiplyScalar(0.995);
+            p.userData.vel.multiplyScalar(0.99); // 공기 저항
 
-            // 벽면 반사 (Bound check)
-            if(Math.abs(p.position.x) > 9.8) { p.userData.vel.x *= -0.5; p.position.x = Math.sign(p.position.x)*9.7; }
-            if(p.position.y > 4.8) { p.userData.vel.y *= -0.5; p.position.y = 4.7; }
-            if(p.position.y < -4.8) { p.userData.vel.y *= -0.5; p.position.y = -4.7; }
-            if(Math.abs(p.position.z) > 7.3) { p.userData.vel.z *= -0.5; p.position.z = Math.sign(p.position.z)*7.2; }
+            // 벽면 충돌 (칸막이 벽)
+            walls.forEach(w => {
+                const bx = new THREE.Box3().setFromObject(w);
+                if(bx.containsPoint(p.position)) {
+                    p.userData.vel.x *= -0.8; // 튕겨나옴
+                    p.position.x += p.userData.vel.x * 2;
+                }
+            });
+
+            // 외벽 반사
+            if(Math.abs(p.position.x) > 9.8) { p.userData.vel.x *= -0.7; p.position.x = Math.sign(p.position.x)*9.7; }
+            if(p.position.y > 4.8) { p.userData.vel.y *= -0.7; p.position.y = 4.7; }
+            if(p.position.y < -4.8) { p.userData.vel.y *= -0.7; p.position.y = -4.7; }
+            if(Math.abs(p.position.z) > 7.3) { p.userData.vel.z *= -0.7; p.position.z = Math.sign(p.position.z)*7.2; }
         }
         updateCharts();
         renderer.render(scene, camera);
